@@ -1,6 +1,6 @@
 ---
 title: IRis Compiler Optimization Environment
-emoji: ⚡
+emoji: zap
 colorFrom: blue
 colorTo: purple
 sdk: docker
@@ -13,7 +13,7 @@ tags:
 
 # IRis Compiler Optimization Environment
 
-An OpenEnv environment where an **LLM agent selects LLVM optimization passes** to minimize execution time of C programs compiled for **RISC-V architecture**. The agent builds a sequence of compiler passes, then compiles and measures performance against standard optimization level baselines (O0–O3).
+An OpenEnv environment where an **LLM agent selects LLVM optimization passes** to minimize execution time of C programs compiled for **RISC-V architecture**. The agent builds a sequence of compiler passes, then compiles and measures performance against standard optimization level baselines (O0-O3).
 
 ## Quick Start
 
@@ -21,7 +21,7 @@ An OpenEnv environment where an **LLM agent selects LLVM optimization passes** t
 from compiler_env import CompilerAction, CompilerEnv
 
 with CompilerEnv.from_docker_image("compiler_env-env:latest") as env:
-    # Start episode — picks a C program and computes baselines
+    # Start episode - picks a C program and computes baselines
     result = env.reset()
     print(f"Program: {result.observation.data['program']}")
     print(f"O3 baseline: {result.observation.data['baselines']['O3']}s")
@@ -40,9 +40,9 @@ with CompilerEnv.from_docker_image("compiler_env-env:latest") as env:
 ## How It Works
 
 1. **reset()** picks a C program (random from 200 training programs, or a fixed eval task)
-2. The environment compiles it with `-O0`, `-O1`, `-O2`, `-O3` and measures each on QEMU → **baselines**
+2. The environment compiles it with `-O0`, `-O1`, `-O2`, `-O3` and measures each on QEMU -> **baselines**
 3. The agent calls tools to build an optimization pass sequence
-4. **compile_and_measure** runs the full pipeline: `clang → opt (agent's passes) → llc → gcc → qemu`
+4. **compile_and_measure** runs the full pipeline: `clang -> opt (agent's passes) -> llc -> gcc -> qemu`
 5. Reward is based on how the agent's execution time compares to baselines
 
 ## Action Space
@@ -58,11 +58,11 @@ with CompilerEnv.from_docker_image("compiler_env-env:latest") as env:
 ## Observation
 
 **CompilerObservation** fields:
-- **data** (dict) — Action-specific data (baselines, sequences, execution times, etc.)
-- **status** (str) — `"success"`, `"error"`, `"invalid_pass"`, `"failed"`
-- **message** (str) — Human-readable description
-- **reward** (float) — Cumulative episode reward
-- **done** (bool) — Whether the episode has ended
+- **data** (dict) - Action-specific data (baselines, sequences, execution times, etc.)
+- **status** (str) - `"success"`, `"error"`, `"invalid_pass"`, `"failed"`
+- **message** (str) - Human-readable description
+- **reward** (float) - Cumulative episode reward
+- **done** (bool) - Whether the episode has ended
 
 ## Reward Structure (Partial Progress)
 
@@ -88,9 +88,9 @@ with CompilerEnv.from_docker_image("compiler_env-env:latest") as env:
 ## System Requirements
 
 The Docker image includes all needed tools:
-- **clang** + **llvm** (opt, llc) — LLVM compilation toolchain
-- **gcc-riscv64-linux-gnu** — RISC-V cross-compiler
-- **qemu-user** (qemu-riscv64) — RISC-V binary emulation
+- **clang** + **llvm** (opt, llc) - LLVM compilation toolchain
+- **gcc-riscv64-linux-gnu** - RISC-V cross-compiler
+- **qemu-user** (qemu-riscv64) - RISC-V binary emulation
 
 ## Building & Deploying
 
@@ -113,22 +113,22 @@ uvicorn server.app:app --reload --host 0.0.0.0 --port 8000
 
 ```
 compiler_env/
-├── __init__.py                      # Module exports
-├── README.md                        # This file
-├── openenv.yaml                     # OpenEnv manifest
-├── pyproject.toml                   # Dependencies
-├── client.py                        # CompilerEnv WebSocket client
-├── models.py                        # CompilerAction & CompilerObservation
-├── baseline_inference.py            # Baseline script (OpenAI API)
-├── training_programs/               # 200 C programs
-│   ├── 01_insertion_sort.c
-│   ├── 08_strassen_matrix.c
-│   ├── 114_polynomial_multiply_fft.c
-│   └── ... (197 more)
-└── server/
-    ├── __init__.py
-    ├── compiler_env_environment.py  # Core environment logic
-    ├── app.py                       # FastAPI app (HTTP + WebSocket)
-    ├── requirements.txt
-    └── Dockerfile
+|-- __init__.py                      # Module exports
+|-- README.md                        # This file
+|-- openenv.yaml                     # OpenEnv manifest
+|-- pyproject.toml                   # Dependencies
+|-- client.py                        # CompilerEnv WebSocket client
+|-- models.py                        # CompilerAction & CompilerObservation
+|-- inference.py                     # Baseline script (OpenAI API)
+|-- training_programs/               # 200 C programs
+|   |-- 01_insertion_sort.c
+|   |-- 08_strassen_matrix.c
+|   |-- 114_polynomial_multiply_fft.c
+|   +-- ... (197 more)
++-- server/
+    |-- __init__.py
+    |-- compiler_env_environment.py  # Core environment logic
+    |-- app.py                       # FastAPI app (HTTP + WebSocket)
+    |-- requirements.txt
+    +-- Dockerfile
 ```
