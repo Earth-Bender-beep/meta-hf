@@ -58,13 +58,13 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
 MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 BENCHMARK = os.getenv("COMPILER_ENV_BENCHMARK", "compiler_env")
-MAX_STEPS = 30
+MAX_STEPS = 50
 TEMPERATURE = 0.7
 MAX_TOKENS = 512
 SUCCESS_SCORE_THRESHOLD = 0.1
 
-# Max possible reward: 0.05 * 30 (all valid passes) + 1.0 (beat O3) = 2.5
-MAX_TOTAL_REWARD = 2.5
+# Max possible reward: 0.05 * 50 (all valid passes) + 1.0 (beat O3) = 3.5
+MAX_TOTAL_REWARD = 3.5
 
 SYSTEM_PROMPT = textwrap.dedent(
     """

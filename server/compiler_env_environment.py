@@ -100,7 +100,7 @@ class CompilerEnvironment(Environment):
         """Initialize the compiler optimization environment."""
         self._state = State(episode_id=str(uuid4()), step_count=0)
 
-        self.max_steps = 30
+        self.max_steps = 50
         self.action_space = [
             "add_pass", "compile_and_measure", "get_program_info",
             "list_passes", "get_current_sequence",
