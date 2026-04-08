@@ -28,28 +28,31 @@ Usage:
     python -m server.app
 """
 
-app = None
+import os
+import sys
+
+# Ensure parent directory is on sys.path for imports to resolve in all contexts
+_parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _parent_dir not in sys.path:
+    sys.path.insert(0, _parent_dir)
+
+from openenv.core.env_server.http_server import create_app
 
 try:
-    from openenv.core.env_server.http_server import create_app
+    from ..models import CompilerAction, CompilerObservation
+    from .compiler_env_environment import CompilerEnvironment
+except ImportError:
+    from models import CompilerAction, CompilerObservation
+    from server.compiler_env_environment import CompilerEnvironment
 
-    try:
-        from ..models import CompilerAction, CompilerObservation
-        from .compiler_env_environment import CompilerEnvironment
-    except ImportError:
-        from models import CompilerAction, CompilerObservation
-        from server.compiler_env_environment import CompilerEnvironment
-
-    # Create the app with web interface and README integration
-    app = create_app(
-        CompilerEnvironment,
-        CompilerAction,
-        CompilerObservation,
-        env_name="compiler_env",
-        max_concurrent_envs=1,  # increase this number to allow more concurrent WebSocket sessions
-    )
-except Exception:
-    pass
+# Create the app with web interface and README integration
+app = create_app(
+    CompilerEnvironment,
+    CompilerAction,
+    CompilerObservation,
+    env_name="compiler_env",
+    max_concurrent_envs=1,  # increase this number to allow more concurrent WebSocket sessions
+)
 
 
 def main(host: str = "0.0.0.0", port: int = 8000):
@@ -75,9 +78,4 @@ def main(host: str = "0.0.0.0", port: int = 8000):
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8000)
-    args = parser.parse_args()
-    main(port=args.port)
+    main()
