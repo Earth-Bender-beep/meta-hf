@@ -4,3 +4,17 @@ type: space
 runtime: fastapi
 app: server.app:app
 port: 8000
+
+tasks:
+  easy:
+    description: "Optimize insertion sort - a simple sorting algorithm"
+    program: "01_insertion_sort.c"
+    grader: builtin
+  medium:
+    description: "Optimize Strassen matrix multiplication"
+    program: "08_strassen_matrix.c"
+    grader: builtin
+  hard:
+    description: "Optimize polynomial multiplication via FFT"
+    program: "114_polynomial_multiply_fft.c"
+    grader: builtin
