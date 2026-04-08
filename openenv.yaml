@@ -15,6 +15,6 @@ tasks:
     program: "08_strassen_matrix.c"
     grader: builtin
   hard:
-    description: "Optimize polynomial multiplication via FFT"
-    program: "114_polynomial_multiply_fft.c"
+    description: "Optimize FFT radix-2 computation"
+    program: "43_fft_radix2.c"
     grader: builtin
