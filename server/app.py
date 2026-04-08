@@ -28,29 +28,28 @@ Usage:
     python -m server.app
 """
 
+app = None
+
 try:
     from openenv.core.env_server.http_server import create_app
-except Exception as e:  # pragma: no cover
-    raise ImportError(
-        "openenv is required for the web interface. Install dependencies with '\n    uv sync\n'"
-    ) from e
 
-try:
-    from ..models import CompilerAction, CompilerObservation
-    from .compiler_env_environment import CompilerEnvironment
-except ImportError:
-    from models import CompilerAction, CompilerObservation
-    from server.compiler_env_environment import CompilerEnvironment
+    try:
+        from ..models import CompilerAction, CompilerObservation
+        from .compiler_env_environment import CompilerEnvironment
+    except ImportError:
+        from models import CompilerAction, CompilerObservation
+        from server.compiler_env_environment import CompilerEnvironment
 
-
-# Create the app with web interface and README integration
-app = create_app(
-    CompilerEnvironment,
-    CompilerAction,
-    CompilerObservation,
-    env_name="compiler_env",
-    max_concurrent_envs=1,  # increase this number to allow more concurrent WebSocket sessions
-)
+    # Create the app with web interface and README integration
+    app = create_app(
+        CompilerEnvironment,
+        CompilerAction,
+        CompilerObservation,
+        env_name="compiler_env",
+        max_concurrent_envs=1,  # increase this number to allow more concurrent WebSocket sessions
+    )
+except Exception:
+    pass
 
 
 def main(host: str = "0.0.0.0", port: int = 8000):
