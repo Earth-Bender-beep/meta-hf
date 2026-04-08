@@ -15,6 +15,6 @@ tasks:
     program: "08_strassen_matrix.c"
     grader: builtin
   hard:
-    description: "Optimize FFT radix-2 computation"
-    program: "43_fft_radix2.c"
+    description: "Optimize Karatsuba large-integer multiplication"
+    program: "120_karatsuba_multiply.c"
     grader: builtin

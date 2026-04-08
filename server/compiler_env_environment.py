@@ -37,7 +37,7 @@ PROGRAMS_DIR = os.path.join(os.path.dirname(__file__), "..", "training_programs"
 EVAL_PROGRAMS = {
     "easy": os.path.join(PROGRAMS_DIR, "01_insertion_sort.c"),
     "medium": os.path.join(PROGRAMS_DIR, "08_strassen_matrix.c"),
-    "hard": os.path.join(PROGRAMS_DIR, "43_fft_radix2.c"),
+    "hard": os.path.join(PROGRAMS_DIR, "120_karatsuba_multiply.c"),
 }
 
 ALL_PROGRAMS = sorted(glob.glob(os.path.join(PROGRAMS_DIR, "*.c")))
