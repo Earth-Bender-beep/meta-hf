@@ -38,12 +38,19 @@ STDOUT FORMAT
 import asyncio
 import json
 import os
+import sys
 import textwrap
 from typing import List, Optional
 
 from openai import OpenAI
 
-from compiler_env import CompilerAction, CompilerEnv
+try:
+    from compiler_env import CompilerAction, CompilerEnv
+except ImportError:
+    # Running directly from repo root (not installed as package)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from client import CompilerEnv
+    from models import CompilerAction
 
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 HF_TOKEN = os.getenv("HF_TOKEN")
@@ -188,10 +195,32 @@ def get_model_tool_call(client: OpenAI, messages: list) -> tuple:
         return None, None, None
 
 
+async def create_env() -> CompilerEnv:
+    """Create environment client, trying multiple connection methods."""
+    # 1. If an explicit URL is provided, connect directly
+    env_url = os.getenv("OPENENV_URL") or os.getenv("ENV_URL")
+    if env_url:
+        print(f"[DEBUG] Connecting to env URL: {env_url}", flush=True)
+        client = CompilerEnv(base_url=env_url)
+        await client.connect()
+        return client
+
+    # 2. If LOCAL_IMAGE_NAME is set, start from Docker image
+    if LOCAL_IMAGE_NAME:
+        print(f"[DEBUG] Starting from Docker image: {LOCAL_IMAGE_NAME}", flush=True)
+        return await CompilerEnv.from_docker_image(LOCAL_IMAGE_NAME)
+
+    # 3. Fallback: try localhost:8000 (container already running)
+    print("[DEBUG] No image/URL set, trying localhost:8000", flush=True)
+    client = CompilerEnv(base_url="http://localhost:8000")
+    await client.connect()
+    return client
+
+
 async def main() -> None:
     client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
-    env = await CompilerEnv.from_docker_image(LOCAL_IMAGE_NAME)
+    env = await create_env()
 
     history_messages: list = []
     rewards: List[float] = []
@@ -283,4 +312,9 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except Exception as exc:
+        print(f"[END] success=false steps=0 score=0.000 rewards=", flush=True)
+        print(f"[DEBUG] Fatal error: {exc}", flush=True)
+        sys.exit(1)
