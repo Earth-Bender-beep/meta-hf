@@ -459,11 +459,11 @@ class CompilerEnvironment(Environment):
         Returns a score between 0.0 and 1.0.
         """
         if not self.done:
-            return 0.0
+            return 0.001
         if self.baseline_O3 is None or self.baseline_O0 is None:
-            return 0.0
+            return 0.001
 
         max_reward = 0.05 * self.max_steps + 1.0
         min_reward = -0.2 * self.max_steps - 0.5
         score = (self.episode_reward - min_reward) / (max_reward - min_reward)
-        return max(0.0, min(1.0, score))
+        return max(0.001, min(0.999, score))

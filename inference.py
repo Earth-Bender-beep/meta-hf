@@ -225,7 +225,7 @@ async def run_task(
     """Run a single task (one [START]...[END] block)."""
     rewards: List[float] = []
     steps_taken = 0
-    score = 0.0
+    score = 0.001
     success = False
 
     log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
@@ -300,7 +300,7 @@ async def run_task(
         # Compute score: normalize cumulative reward to [0, 1]
         total_reward = rewards[-1] if rewards else 0.0  # last reward is cumulative
         score = total_reward / MAX_TOTAL_REWARD if MAX_TOTAL_REWARD > 0 else 0.0
-        score = min(max(score, 0.0), 1.0)
+        score = min(max(score, 0.001), 0.999)
         success = score >= SUCCESS_SCORE_THRESHOLD
 
     except Exception as exc:
@@ -328,6 +328,6 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except Exception as exc:
-        print(f"[END] success=false steps=0 score=0.000 rewards=", flush=True)
+        print(f"[END] success=false steps=0 score=0.001 rewards=", flush=True)
         print(f"[DEBUG] Fatal error: {exc}", flush=True)
         sys.exit(1)
