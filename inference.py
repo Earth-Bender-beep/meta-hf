@@ -57,7 +57,6 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
 MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
-TASK_NAME = os.getenv("COMPILER_ENV_TASK", "easy")
 BENCHMARK = os.getenv("COMPILER_ENV_BENCHMARK", "compiler_env")
 MAX_STEPS = 30
 TEMPERATURE = 0.7
@@ -195,6 +194,9 @@ def get_model_tool_call(client: OpenAI, messages: list) -> tuple:
         return None, None, None
 
 
+TASK_IDS = ["easy", "medium", "hard"]
+
+
 async def create_env() -> CompilerEnv:
     """Create environment client, trying multiple connection methods."""
     # 1. If an explicit URL is provided, connect directly
@@ -217,26 +219,24 @@ async def create_env() -> CompilerEnv:
     return client
 
 
-async def main() -> None:
-    client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
-
-    env = await create_env()
-
-    history_messages: list = []
+async def run_task(
+    task_id: str, env: CompilerEnv, llm_client: OpenAI
+) -> None:
+    """Run a single task (one [START]...[END] block)."""
     rewards: List[float] = []
     steps_taken = 0
     score = 0.0
     success = False
 
-    log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
+    log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
 
     try:
-        result = await env.reset()
+        result = await env.reset(task_id=task_id)
         obs = result.observation
         obs_data = obs.data
 
         # Build initial conversation with program info
-        history_messages = [
+        history_messages: list = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
@@ -259,7 +259,7 @@ async def main() -> None:
                 break
 
             # Ask LLM for next tool call
-            fn_name, fn_args, raw_tc = get_model_tool_call(client, history_messages)
+            fn_name, fn_args, raw_tc = get_model_tool_call(llm_client, history_messages)
 
             if fn_name is None:
                 # No tool call -- agent stopped; force compile_and_measure
@@ -303,12 +303,25 @@ async def main() -> None:
         score = min(max(score, 0.0), 1.0)
         success = score >= SUCCESS_SCORE_THRESHOLD
 
+    except Exception as exc:
+        print(f"[DEBUG] Task {task_id} error: {exc}", flush=True)
+
+    finally:
+        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
+
+
+async def main() -> None:
+    llm_client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
+    env = await create_env()
+
+    try:
+        for task_id in TASK_IDS:
+            await run_task(task_id, env, llm_client)
     finally:
         try:
             await env.close()
         except Exception as e:
             print(f"[DEBUG] env.close() error (container cleanup): {e}", flush=True)
-        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
 
 if __name__ == "__main__":
