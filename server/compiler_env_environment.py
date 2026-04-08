@@ -144,19 +144,37 @@ class CompilerEnvironment(Environment):
                 raise ValueError(
                     f"Task ID '{task_id}' not found. Valid: {list(self.eval_programs.keys())}"
                 )
+            programs_to_try = [self.current_program]
         else:
-            self.current_program = random.choice(self.train_programs)
+            programs_to_try = [random.choice(self.train_programs)]
+            # Build a retry list of up to 5 different programs
+            tried = {programs_to_try[0]}
+            while len(programs_to_try) < 5:
+                candidate = random.choice(self.train_programs)
+                if candidate not in tried:
+                    programs_to_try.append(candidate)
+                    tried.add(candidate)
 
-        # Reset episode state
-        self.current_sequence = []
-        self.episode_reward = 0.0
-        self.done = False
+        # Try programs until one compiles successfully
+        last_error = None
+        for program in programs_to_try:
+            self.current_program = program
+            self.current_sequence = []
+            self.episode_reward = 0.0
+            self.done = False
+            try:
+                self.baseline_O0 = self._compute_baseline(self.current_program, "O0")
+                self.baseline_O1 = self._compute_baseline(self.current_program, "O1")
+                self.baseline_O2 = self._compute_baseline(self.current_program, "O2")
+                self.baseline_O3 = self._compute_baseline(self.current_program, "O3")
+                last_error = None
+                break
+            except (RuntimeError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+                last_error = e
+                continue
 
-        # Compute baselines
-        self.baseline_O0 = self._compute_baseline(self.current_program, "O0")
-        self.baseline_O1 = self._compute_baseline(self.current_program, "O1")
-        self.baseline_O2 = self._compute_baseline(self.current_program, "O2")
-        self.baseline_O3 = self._compute_baseline(self.current_program, "O3")
+        if last_error is not None:
+            raise RuntimeError(f"All programs failed to compile: {last_error}")
 
         return CompilerObservation(
             data={
@@ -326,7 +344,13 @@ class CompilerEnvironment(Environment):
             "--gcc-toolchain=/usr",
             f"-{flag}", program_path, "-o", exe_file, "-static",
         ]
-        subprocess.run(clang_cmd, check=True, capture_output=True, timeout=30)
+        result = subprocess.run(clang_cmd, capture_output=True, timeout=30)
+        if result.returncode != 0:
+            stderr = result.stderr.decode(errors="replace")
+            raise RuntimeError(
+                f"Baseline compilation failed for {os.path.basename(program_path)} "
+                f"with -{flag}: {stderr}"
+            )
 
         start = time.perf_counter()
         subprocess.run(
