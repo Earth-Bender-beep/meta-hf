@@ -29,26 +29,28 @@ An LLM agent selects a sequence of **LLVM optimization passes** to minimize the 
 ```
     ┌──────────┐
     │  reset() │  Picks a C program, compiles it at O0/O1/O2/O3,
-    └────┬─────┘  measures each baseline execution time via QEMU
+    └────┬─────┘  measures baselines. best_time = O0 time.
          │
          ▼
-    ┌──────────────────────────┐
-    │  Agent Loop (up to 50    │
-    │  steps)                  │
-    │                          │
-    │  LLM picks a tool call:  │
-    │  ┌────────────────────┐  │
-    │  │ add_pass(name)     │──┼──► Appends pass to sequence (+0.05 reward)
-    │  │ list_passes()      │──┼──► Returns all 44 valid passes (info only)
-    │  │ get_program_info() │──┼──► Returns program name + baselines (info only)
-    │  │ get_current_seq()  │──┼──► Returns current pass sequence (info only)
-    │  │ compile_and_measure│──┼──► Compiles & runs → ends episode
-    │  └────────────────────┘  │
-    └──────────┬───────────────┘
-               │
-               ▼
+    ┌──────────────────────────────────────────────────┐
+    │  Agent Loop (up to 50 steps)                     │
+    │                                                  │
+    │  add_pass(name) ──► auto-compile ──► measure     │
+    │    ├─ improved? ──► KEEP pass (+0.1 reward)      │
+    │    ├─ no gain?  ──► AUTO-REMOVE pass (-0.05)     │
+    │    ├─ duplicate? ─► REJECT (-0.1)                │
+    │    └─ compile fail ► REMOVE (-0.1)               │
+    │                                                  │
+    │  list_passes()      ──► info only (no reward)    │
+    │  get_program_info() ──► info only (no reward)    │
+    │  get_current_seq()  ──► info only (no reward)    │
+    │  finalize()         ──► end episode + final bonus│
+    └──────────────────┬───────────────────────────────┘
+                       │
+                       ▼
     ┌──────────────────────────┐
     │  Episode Ends            │
+    │  Final bonus by tier     │
     │  Score = f(reward)       │
     └──────────────────────────┘
 ```
@@ -91,7 +93,7 @@ Organized by category:
 
 ## Compilation Pipeline
 
-When the agent calls `compile_and_measure`, the full pipeline runs:
+Each `add_pass` triggers the full compilation pipeline automatically:
 
 ```
 C source ──► clang -O0 -emit-llvm ──► LLVM bitcode (.bc)
@@ -120,28 +122,29 @@ C source ──► clang -O0 -emit-llvm ──► LLVM bitcode (.bc)
 
 ## Reward Structure
 
-### Per-Step Rewards
-| Event                          | Reward   |
-|--------------------------------|----------|
-| Valid pass added (`add_pass`)  | **+0.05** |
-| Invalid pass name              | **-0.20** |
-| Missing pass name              | **-0.10** |
-| Compilation/execution failure  | **-0.50** |
+### Per-Step Rewards (on `add_pass`)
+| Event                                        | Reward    |
+|----------------------------------------------|-----------|
+| Pass improves execution time → **KEPT**      | **+0.10** |
+| Pass doesn't improve → **AUTO-REMOVED**      | **-0.05** |
+| Duplicate pass → **REJECTED**                | **-0.10** |
+| Invalid pass name                            | **-0.10** |
+| Compilation failure → **REMOVED**            | **-0.10** |
 
-### Final Reward (on `compile_and_measure`)
-| Condition                      | Reward   |
+### Final Bonus (on `finalize()`)
+| Condition                      | Bonus    |
 |--------------------------------|----------|
 | Beat O3 baseline               | **+1.0** |
 | Beat O2 baseline               | **+0.5** |
 | Beat O1 baseline               | **+0.3** |
 | Beat O0 baseline               | **+0.1** |
-| Slower than O0                 | **+0.0** |
+| Failed to beat O0              | **-0.5** |
 
 ### Episode Reward
-`episode_reward` = sum of all per-step rewards + final reward
+`episode_reward` = sum of all per-step rewards + final bonus
 
-**Max possible**: 0.05 × 50 + 1.0 = **3.5** (all valid passes + beat O3)
-**Min possible**: -0.2 × 50 - 0.5 = **-10.5** (all invalid passes + compilation failure)
+**Max possible**: 0.1 × 44 (all unique passes improve) + 1.0 (beat O3) = **5.4**
+**Min possible**: -0.1 × 50 (all steps invalid/duplicate) - 0.5 (fail finalize) = **-5.5**
 
 ---
 
@@ -155,8 +158,8 @@ score = clamp(score, 0.001, 0.999)
 ```
 
 Where:
-- `max_reward = 0.05 × 50 + 1.0 = 3.5`
-- `min_reward = -0.2 × 50 - 0.5 = -10.5`
+- `max_reward = 0.1 × 44 + 1.0 = 5.4`
+- `min_reward = -0.1 × 50 - 0.5 = -5.5`
 
 This ensures scores are **strictly between 0 and 1** (never exactly 0.0 or 1.0).
 
@@ -172,18 +175,22 @@ for task in ["easy", "medium", "hard"]:
     
     reset(task_id=task)
     loop:
-        LLM → tool call → env.step() → observation
-        [STEP] step=1 action=add_pass:mem2reg reward=0.05 done=false error=null
+        LLM → add_pass(name) → auto-compile → feedback (kept/removed)
+        [STEP] step=1 action=add_pass:mem2reg reward=0.10 done=false error=null
+        [STEP] step=2 action=add_pass:licm reward=-0.05 done=false error=null  (removed)
         ...
+        LLM → finalize() → final bonus
+        [STEP] step=8 action=finalize reward=0.85 done=true error=null
     
-    [END] success=true steps=8 score=0.722 rewards=0.05,0.10,...
+    [END] success=true steps=8 score=0.150 rewards=0.10,0.05,...
 ```
 
 ### LLM Interaction
 - Uses **Qwen 72B** via OpenAI-compatible API
-- **Tool calling**: LLM returns structured function calls (`add_pass`, `compile_and_measure`, etc.)
+- **Tool calling**: LLM returns structured function calls (`add_pass`, `finalize`, etc.)
+- After each `add_pass`, the agent sees whether the pass was kept or removed + measured time
 - Tool results are fed back into the conversation for multi-turn reasoning
-- If LLM returns no tool call, `compile_and_measure` is forced
+- If LLM returns no tool call, `finalize` is forced
 
 ---
 
@@ -192,11 +199,13 @@ for task in ["easy", "medium", "hard"]:
 | Variable            | Type        | Description                                    |
 |---------------------|-------------|------------------------------------------------|
 | `current_program`   | `str`       | Path to the current C source file              |
-| `current_sequence`  | `list[str]` | Agent's accumulated LLVM pass sequence         |
+| `current_sequence`  | `list[str]` | Only passes that improved — the "winners"      |
 | `episode_reward`    | `float`     | Cumulative reward for the episode              |
 | `done`              | `bool`      | Whether the episode has ended                  |
 | `baseline_O0..O3`   | `float`     | Execution times (seconds) at each opt level    |
-| `max_steps`         | `int`       | 50 — max steps before forced episode end       |
+| `best_time`         | `float`     | Best execution time seen (starts at O0)        |
+| `current_time`      | `float`     | Latest measured execution time                 |
+| `max_steps`         | `int`       | 50 — max steps before auto-finalize            |
 | `step_count`        | `int`       | Current step number in the episode             |
 
 ---

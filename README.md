@@ -1,6 +1,6 @@
 ---
 title: IRis Compiler Optimization Environment
-emoji: zap
+emoji: ⚡
 colorFrom: blue
 colorTo: purple
 sdk: docker

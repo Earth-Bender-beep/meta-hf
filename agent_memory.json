@@ -1,0 +1,10 @@
+{
+  "good_sequences": [],
+  "bad_sequences": [],
+  "insights": [
+    "Apply mem2reg early - it promotes stack allocations to registers",
+    "simplifycfg and instcombine are almost always beneficial",
+    "Loop passes (licm, indvars, loop-unroll) help compute-heavy programs",
+    "Order matters: mem2reg -> simplifycfg -> instcombine -> gvn -> loop opts"
+  ]
+}
