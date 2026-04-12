@@ -86,10 +86,8 @@ SYSTEM_PROMPT = textwrap.dedent(
     Each turn you must reply with exactly ONE tool call. Available tools:
     - add_pass(pass_name): Try adding a pass. Auto-compiled and evaluated.
     - remove_pass(pass_name): Remove a previously kept pass (-0.05 penalty).
+    - reorder_sequence(new_order): Reorder passes. +0.1 if improves, -0.05 if not (reverts).
     - finalize(): End the episode. You receive a final bonus based on baselines.
-    - get_program_info(): Get program name and baseline execution times
-    - list_passes(): List all 19 valid LLVM optimization passes
-    - get_current_sequence(): Get kept passes and current best time
 
     Available 19 passes (use exact names):
     MEMORY:
@@ -169,32 +167,25 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "reorder_sequence",
+            "description": "Reorder the current pass sequence. Provide the same passes in a new order. Auto-compiles: +0.1 if time improves (keeps new order), -0.05 if not (reverts).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "new_order": {
+                        "type": "string",
+                        "description": "Comma-separated pass names in the desired new order, e.g. 'gvn,mem2reg,simplifycfg'",
+                    }
+                },
+                "required": ["new_order"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "finalize",
             "description": "End the episode. Computes final bonus based on how your best time compares to O0/O1/O2/O3 baselines. Call this when you are satisfied with your pass sequence.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_program_info",
-            "description": "Get information about the current program and its baseline execution times.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_passes",
-            "description": "List all valid LLVM optimization passes.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_current_sequence",
-            "description": "Get the current kept pass sequence and best execution time.",
             "parameters": {"type": "object", "properties": {}},
         },
     },
@@ -322,6 +313,8 @@ def tool_call_to_action(tool_name: str, tool_args: dict) -> str:
         return f"add_pass:{tool_args.get('pass_name', '')}"
     if tool_name == "remove_pass":
         return f"remove_pass:{tool_args.get('pass_name', '')}"
+    if tool_name == "reorder_sequence":
+        return f"reorder_sequence:{tool_args.get('new_order', '')}"
     return tool_name
 
 

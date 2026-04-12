@@ -99,8 +99,7 @@ class CompilerEnvironment(Environment):
 
         self.max_steps = 30
         self.action_space = [
-            "add_pass", "remove_pass", "finalize", "get_program_info",
-            "list_passes", "get_current_sequence",
+            "add_pass", "remove_pass", "reorder_sequence", "finalize",
         ]
         self.current_sequence = []
         self.valid_passes = ALL_PASSES
@@ -239,14 +238,10 @@ class CompilerEnvironment(Environment):
             obs_data, status, message = self._add_pass(action_arg)
         elif action_name == "remove_pass":
             obs_data, status, message = self._remove_pass(action_arg)
+        elif action_name == "reorder_sequence":
+            obs_data, status, message = self._reorder_sequence(action_arg)
         elif action_name == "finalize":
             obs_data, status, message = self._finalize()
-        elif action_name == "get_program_info":
-            obs_data, status, message = self._get_program_info()
-        elif action_name == "list_passes":
-            obs_data, status, message = self._list_passes()
-        elif action_name == "get_current_sequence":
-            obs_data, status, message = self._get_current_sequence()
         else:
             raise ValueError(f"Unknown action: {action_name}")
 
@@ -411,6 +406,103 @@ class CompilerEnvironment(Environment):
             "pass_removed_by_agent",
             f"Pass '{pass_name}' removed from sequence. Reward: -0.05. Current sequence: {self.current_sequence}",
         )
+
+    def _reorder_sequence(self, new_order_str):
+        """
+        Reorder the current pass sequence. Agent provides a comma-separated
+        list of the same passes in a new order.
+
+        - Must contain exactly the same passes (no additions/removals)
+        - Auto-compiles and measures
+        - If time improves -> keep new order (+0.1)
+        - If not -> revert to old order (-0.05)
+        """
+        base_data = {
+            "current_sequence": list(self.current_sequence),
+            "sequence_length": len(self.current_sequence),
+            "best_time": self.best_time,
+            "steps_remaining": self.max_steps - self._state.step_count,
+        }
+
+        if not new_order_str:
+            self.episode_reward -= 0.1
+            return (
+                {**base_data, "reason": "missing_order"},
+                "error",
+                "No pass order provided. Provide comma-separated pass names.",
+            )
+
+        new_order = [p.strip() for p in new_order_str.split(",") if p.strip()]
+
+        # Validate: must be the same passes, just reordered
+        if sorted(new_order) != sorted(self.current_sequence):
+            self.episode_reward -= 0.1
+            return (
+                {**base_data, "reason": "invalid_order", "provided": new_order},
+                "error",
+                f"Invalid reorder. Must contain exactly the same passes. Current: {self.current_sequence}, Got: {new_order}",
+            )
+
+        # Same order as before — no-op
+        if new_order == self.current_sequence:
+            return (
+                base_data,
+                "success",
+                "Sequence unchanged — already in this order.",
+            )
+
+        # Tentatively apply new order
+        old_sequence = list(self.current_sequence)
+        self.current_sequence = new_order
+
+        try:
+            new_time = self._auto_compile_and_measure()
+        except (RuntimeError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            self.current_sequence = old_sequence
+            self.episode_reward -= 0.1
+            return (
+                {**base_data, "reason": "compile_failed"},
+                "compile_failed",
+                f"Compilation failed after reorder: {str(e)[:200]}",
+            )
+
+        self.current_time = new_time
+
+        if new_time < self.best_time:
+            old_best = self.best_time
+            self.best_time = new_time
+            self.episode_reward += 0.1
+            return (
+                {
+                    "reordered": True,
+                    "improved": True,
+                    "execution_time": new_time,
+                    "best_time": self.best_time,
+                    "old_best_time": old_best,
+                    "current_sequence": list(self.current_sequence),
+                    "sequence_length": len(self.current_sequence),
+                    "steps_remaining": self.max_steps - self._state.step_count,
+                },
+                "reorder_improved",
+                f"Reorder improved time! {new_time:.4f}s (was {old_best:.4f}s). New order: {self.current_sequence}",
+            )
+        else:
+            # Revert
+            self.current_sequence = old_sequence
+            self.episode_reward -= 0.05
+            return (
+                {
+                    "reordered": False,
+                    "improved": False,
+                    "execution_time": new_time,
+                    "best_time": self.best_time,
+                    "current_sequence": list(self.current_sequence),
+                    "sequence_length": len(self.current_sequence),
+                    "steps_remaining": self.max_steps - self._state.step_count,
+                },
+                "reorder_reverted",
+                f"Reorder did NOT improve. Reverted. Time: {new_time:.4f}s vs best: {self.best_time:.4f}s",
+            )
 
     def _get_program_info(self):
         """Return program name and baselines."""
